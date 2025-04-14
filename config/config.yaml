@@ -1,5 +1,5 @@
 monitoring:
-  interval: 30  # Polling interval in seconds
+  interval: 5  # Polling interval in seconds
   thresholds:
     success_rate_drop: 5.0  # Percentage drop to trigger alert
     minimum_transactions: 1  # Minimum transactions to consider for analysis
@@ -17,7 +17,7 @@ database:
   port: 5433
   user: "bheemisetty.v"
   password: ""
-  dbname: "optimizer-core-live"
+  dbname: "optimizer_core_live"
   sslmode: "disable"
 
 llm:
@@ -28,7 +28,7 @@ llm:
 context_builder:
   github:
     enabled: true
-    token: ""  # GitHub API token
+    token: ""
     repos:
       - "https://github.com/razorpay/integrations-go"
       - "https://github.com/razorpay/optimizer-core/"

@@ -83,14 +83,14 @@ func main() {
 }
 
 func initDB(cfg *config.Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.DBName,
-		cfg.Database.SSLMode,
-	)
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+	cfg.Database.User,
+	cfg.Database.Password,
+	cfg.Database.Host,
+	cfg.Database.Port,
+	cfg.Database.DBName,
+	cfg.Database.SSLMode,
+)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -123,6 +123,7 @@ func processAlerts(
 		case alert := <-alertChan:
 			go func(alert *models.Alert) {
 				// Build context
+				fmt.Println("Building context for alert", alert)
 				context, err := contextBuilder.BuildContext(ctx, alert)
 				if err != nil {
 					log.Printf("Error building context: %v", err)

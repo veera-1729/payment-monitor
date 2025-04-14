@@ -1,9 +1,11 @@
 package contextbuilder
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -90,20 +92,64 @@ func (b *ContextBuilder) BuildContext(ctx context.Context, alert *models.Alert) 
 func (b *ContextBuilder) getRecentGitHubChanges(ctx context.Context, repo string) ([]models.GitHubChange, error) {
 	lookbackTime := time.Now().Add(-time.Duration(b.config.LookbackHours) * time.Hour)
 	
+	// Extract owner and repo name from the full URL
+	parts := strings.Split(repo, "/")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid repository format: %s. Expected format: owner/repo", repo)
+	}
+	owner := parts[len(parts)-2]
+	repoName := parts[len(parts)-1]
+	
+	// Remove .git suffix if present
+	repoName = strings.TrimSuffix(repoName, ".git")
+	
+	apiRepoPath := fmt.Sprintf("%s/%s", owner, repoName)
+	
 	url := fmt.Sprintf("https://api.github.com/repos/%s/commits?since=%s", 
-		repo, 
+		apiRepoPath, 
 		lookbackTime.Format(time.RFC3339))
+	
+	fmt.Printf("Making GitHub API request to: %s\n", url)
+	
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("token %s", b.config.GitHubToken))
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to make request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Read and log the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	fmt.Printf("GitHub API Response Body: %s\n", string(body))
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse struct {
+			Message          string `json:"message"`
+			DocumentationURL string `json:"documentation_url"`
+			Status          string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &errorResponse); err != nil {
+			return nil, fmt.Errorf("GitHub API error (status %d): failed to parse error response: %v", resp.StatusCode, err)
+		}
+		return nil, fmt.Errorf("GitHub API error (status %d): %s. Documentation: %s", 
+			resp.StatusCode, 
+			errorResponse.Message, 
+			errorResponse.DocumentationURL)
+	}
+
+	// Create a new reader from the body for the JSON decoder
+	reader := bytes.NewReader(body)
 
 	var commits []struct {
 		Sha    string `json:"sha"`
@@ -115,9 +161,10 @@ func (b *ContextBuilder) getRecentGitHubChanges(ctx context.Context, repo string
 			Message string `json:"message"`
 		} `json:"commit"`
 	}
+	
 
-	if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil {
-		return nil, err
+	if err := json.NewDecoder(reader).Decode(&commits); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
 	if len(commits) > b.config.MaxCommitsPerRepo {
@@ -150,18 +197,59 @@ func (b *ContextBuilder) getRecentGitHubChanges(ctx context.Context, repo string
 }
 
 func (b *ContextBuilder) getCommitFileChanges(ctx context.Context, repo, commitSHA string) ([]string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/commits/%s", repo, commitSHA)
+	// Extract owner and repo name from the full URL
+	parts := strings.Split(repo, "/")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid repository format: %s. Expected format: owner/repo", repo)
+	}
+	owner := parts[len(parts)-2]
+	repoName := parts[len(parts)-1]
+	
+	// Remove .git suffix if present
+	repoName = strings.TrimSuffix(repoName, ".git")
+	
+	apiRepoPath := fmt.Sprintf("%s/%s", owner, repoName)
+	
+	url := fmt.Sprintf("https://api.github.com/repos/%s/commits/%s", apiRepoPath, commitSHA)
+	
+	fmt.Printf("Making GitHub API request to: %s\n", url)
+	
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("token %s", b.config.GitHubToken))
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
 	resp, err := b.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	// Read and log the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	fmt.Printf("GitHub API Response Body: in file changes%s\n", string(body))
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse struct {
+			Message          string `json:"message"`
+			DocumentationURL string `json:"documentation_url"`
+			Status          string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &errorResponse); err != nil {
+			return nil, fmt.Errorf("GitHub API error (status %d): failed to parse error response: %v", resp.StatusCode, err)
+		}
+		return nil, fmt.Errorf("GitHub API error (status %d): %s. Documentation: %s", 
+			resp.StatusCode, 
+			errorResponse.Message, 
+			errorResponse.DocumentationURL)
+	}
 
 	var commitDetail struct {
 		Files []struct {
@@ -174,7 +262,9 @@ func (b *ContextBuilder) getCommitFileChanges(ctx context.Context, repo, commitS
 		} `json:"files"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&commitDetail); err != nil {
+	// Create a new reader from the body for the JSON decoder
+	reader := bytes.NewReader(body)
+	if err := json.NewDecoder(reader).Decode(&commitDetail); err != nil {
 		return nil, err
 	}
 
@@ -183,7 +273,7 @@ func (b *ContextBuilder) getCommitFileChanges(ctx context.Context, repo, commitS
 		// if !isRelevantFile(file.Filename) {
 		// 	continue
 		// }
-
+		fmt.Printf("file: %v\n", file)
 		change := fmt.Sprintf("%s (%s): +%d -%d changes", 
 			file.Filename, 
 			file.Status,
@@ -199,7 +289,10 @@ func (b *ContextBuilder) getCommitFileChanges(ctx context.Context, repo, commitS
 		}
 		
 		fileChanges = append(fileChanges, change)
+		time.Sleep(10 * time.Second)
 	}
+
+	fmt.Printf("fileChanges: %v\n", fileChanges)
 
 	return fileChanges, nil
 }

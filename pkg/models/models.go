@@ -1,6 +1,11 @@
 package models
 
-import "time"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // PaymentStats represents the statistics for a specific dimension
 type PaymentStats struct {
@@ -64,10 +69,77 @@ type Experiment struct {
 
 // Payment represents a payment transaction
 type Payment struct {
-	ID         string    `gorm:"primaryKey"`
-	Gateway    string    `gorm:"index"`
-	Method     string    `gorm:"index"`
-	MerchantID string    `gorm:"index"`
-	Status     string    `gorm:"index"`
-	CreatedAt  time.Time `gorm:"index"`
+	ID               string    `gorm:"primaryKey"`
+	MerchantID       string    `gorm:"index"`
+	PaymentID        string    `gorm:"index"`
+	Amount           int64
+	Currency         string
+	Status           string
+	Method           string
+	Description      string
+	Email            string
+	Contact          string
+	Notes            string
+	AutoCaptured     int16
+	CallbackURL      string
+	Verified         int16
+	Disputed         int16
+	OnHold           int16
+	CustomerID       string
+	GlobalCustomerID string
+	TokenID          string
+	LateAuthorized   int16
+	GatewayCaptured  int16
+	AmountRefunded   int64
+	AmountTransferred int64
+	RefundStatus     string
+	AuthorizedAt     int
+	RefundedAt       int
+	RefundAt         int
+	CapturedAt       int
+	AuthenticatedAt  int
+	SettledBy        string
+	InstrumentID     string
+	TerminalID       string
+	Gateway          string
+	FeeData          JSONB
+	Error            JSONB
+	AcquirerData     JSONB
+	JournalID        string
+	Wallet           string
+	BaseAmount       int64
+}
+
+// TableName specifies the table name for Payment model
+func (Payment) TableName() string {
+	return "payments"
+}
+
+// JSONB is a custom type for JSONB fields
+type JSONB map[string]interface{}
+
+// Scan implements the sql.Scanner interface for JSONB
+func (j *JSONB) Scan(value interface{}) error {
+	if value == nil {
+		*j = JSONB{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("failed to unmarshal JSONB value: %v", value)
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+// Value implements the driver.Valuer interface for JSONB
+func (j JSONB) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+// GormDataType implements the GORM interface for JSONB
+func (JSONB) GormDataType() string {
+	return "jsonb"
 } 
