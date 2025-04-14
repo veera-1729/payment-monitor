@@ -15,11 +15,15 @@ import (
 	"github.com/yourusername/payment-monitor/internal/observer"
 	"github.com/yourusername/payment-monitor/pkg/config"
 	"github.com/yourusername/payment-monitor/pkg/models"
+	"github.com/yourusername/payment-monitor/scripts"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
+
+	scripts.RunMigrations()
+
 	configPath := flag.String("config", "config/config.yaml", "path to config file")
 	flag.Parse()
 
@@ -91,6 +95,7 @@ func initDB(cfg *config.Config) (*gorm.DB, error) {
 	cfg.Database.DBName,
 	cfg.Database.SSLMode,
 )
+	fmt.Println("dsn", dsn)	
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

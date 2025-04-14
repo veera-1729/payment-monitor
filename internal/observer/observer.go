@@ -59,7 +59,7 @@ func (o *Observer) checkDimensions() {
 				continue
 			}
 
-			if true {
+			if stat.DropPercentage > o.config.Threshold {
 				fmt.Println("alerting for dimension", dimension, stat.Value)
 				alert := &models.Alert{
 					ID:             fmt.Sprintf("%s-%s-%d", dimension, stat.Value, time.Now().Unix()),
@@ -94,44 +94,69 @@ func (o *Observer) getPaymentStats(dimension string) ([]*models.PaymentStats, er
 }
 
 func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models.PaymentStats, error) {
-	// Try the stats query using status to determine success
-	var rawResults []struct {
+	var currentStats []struct {
 		Gateway     string
 		Total       int64
 		Successful  int64
 		SuccessRate float64
 	}
-	rawQuery := `
-		SELECT 
-			gateway,
-			COUNT(*) as total,
-			SUM(CASE WHEN status = 'STATUS_CAPTURED' THEN 1 ELSE 0 END) as successful,
-			ROUND(AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100, 2) as success_rate
-		FROM payments
-		GROUP BY gateway
-	`
-	if err := o.db.Raw(rawQuery).Scan(&rawResults).Error; err != nil {
-		fmt.Printf("Error executing stats query: %v\n", err)
+
+	// Get current hour stats
+	if err := o.db.Model(&models.Payment{}).
+		Select("gateway, COUNT(*) as total, "+
+			"SUM(CASE WHEN status = 'STATUS_CAPTURED' THEN 1 ELSE 0 END) as successful, "+
+			"AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
+		Where("created_at >= ?", oneHourAgo.Unix()).
+		Group("gateway").
+		Scan(&currentStats).Error; err != nil {
 		return nil, err
 	}
-	fmt.Printf("Stats query results: %+v\n", rawResults)
+
+	var previousStats []struct {
+		Gateway     string
+		SuccessRate float64
+	}
+
+	// Get previous hour stats
+	if err := o.db.Model(&models.Payment{}).
+		Select("gateway, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
+		Where("created_at >= ? AND created_at < ?", twoHoursAgo.Unix(), oneHourAgo.Unix()).
+		Group("gateway").
+		Scan(&previousStats).Error; err != nil {
+		return nil, err
+	}
 
 	// Combine stats
-	stats := make([]*models.PaymentStats, 0, len(rawResults))
-	for _, result := range rawResults {
+	stats := make([]*models.PaymentStats, 0, len(currentStats))
+	for _, current := range currentStats {
+		previousRate := findPreviousRate(previousStats, current.Gateway)
+		dropPercentage := current.SuccessRate - previousRate
+
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway",
-			Value:          result.Gateway,
-			Total:          int(result.Total),
-			Successful:     int(result.Successful),
-			SuccessRate:    result.SuccessRate,
-			PreviousRate:   0.0,
-			DropPercentage: 0.0,
+			Value:          current.Gateway,
+			Total:          int(current.Total),
+			Successful:     int(current.Successful),
+			SuccessRate:    current.SuccessRate,
+			PreviousRate:   previousRate,
+			DropPercentage: dropPercentage,
 			Timestamp:      time.Now(),
 		})
 	}
 
 	return stats, nil
+}
+
+func findPreviousRate(stats []struct {
+	Gateway     string
+	SuccessRate float64
+}, gateway string) float64 {
+	for _, stat := range stats {
+		if stat.Gateway == gateway {
+			return stat.SuccessRate
+		}
+	}
+	return 0.0
 }
 
 func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*models.PaymentStats, error) {
@@ -244,18 +269,6 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 	}
 
 	return stats, nil
-}
-
-func findPreviousRate(stats []struct {
-	Gateway     string
-	SuccessRate float64
-}, gateway string) float64 {
-	for _, stat := range stats {
-		if stat.Gateway == gateway {
-			return stat.SuccessRate
-		}
-	}
-	return 0.0
 }
 
 func findPreviousRateForGatewayMethod(stats []struct {
