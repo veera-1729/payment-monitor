@@ -1,97 +1,133 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"strings"
 	"time"
 
+	"github.com/sashabaranov/go-openai"
 	"github.com/yourusername/payment-monitor/pkg/models"
 )
 
 type Analyzer struct {
 	config *Config
-	client *http.Client
+	client *openai.Client
 }
 
 type Config struct {
-	APIKey    string
-	Model     string
-	Endpoint  string
+	APIKey     string
+	Model      string
+	Endpoint   string
+	Deployment string
+	APIVersion string
+	APIType    string
 }
 
 type AnalysisResult struct {
-	RootCause    string   `json:"root_cause"`
-	Confidence   float64  `json:"confidence"`
+	RootCause       string   `json:"root_cause"`
+	Confidence      float64  `json:"confidence"`
 	Recommendations []string `json:"recommendations"`
-	RelatedChanges []string `json:"related_changes"`
+	RelatedChanges  []string `json:"related_changes"`
 }
 
 func NewAnalyzer(config *Config) *Analyzer {
+	var clientConfig openai.ClientConfig
+	if config.APIType == "azure" {
+		// Ensure the endpoint has the proper format for Azure OpenAI
+		endpoint := config.Endpoint
+		if !strings.HasPrefix(endpoint, "https://") {
+			endpoint = fmt.Sprintf("https://%s.openai.azure.com", endpoint)
+		}
+		clientConfig = openai.DefaultAzureConfig(config.APIKey, endpoint)
+		clientConfig.APIVersion = config.APIVersion
+		clientConfig.AzureModelMapperFunc = func(model string) string {
+			return config.Deployment
+		}
+	} else {
+		clientConfig = openai.DefaultConfig(config.APIKey)
+		if config.Endpoint != "" {
+			clientConfig.BaseURL = config.Endpoint
+		}
+	}
+
 	return &Analyzer{
 		config: config,
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: openai.NewClientWithConfig(clientConfig),
 	}
 }
 
 func (a *Analyzer) Analyze(ctx context.Context, context *models.AnalysisContext) (*AnalysisResult, error) {
 	prompt := a.buildPrompt(context)
-	
-	requestBody := map[string]interface{}{
-		"model": a.config.Model,
-		"messages": []map[string]string{
-			{
-				"role":    "system",
-				"content": "You are an expert payment system analyst. Analyze the provided context and identify potential root causes for payment success rate drops.",
+
+	// For Azure, use the deployment name as the model
+	model := a.config.Model
+	if a.config.APIType == "azure" {
+		model = a.config.Deployment
+	}
+
+	resp, err := a.client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: model,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: "You are an expert code reviewer. Analyze the provided context and identify potential root causes for payment success rate drops.",
+				},
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt,
+				},
 			},
-			{
-				"role":    "user",
-				"content": prompt,
-			},
+			Temperature: 0.7,
+			MaxTokens:   1000,
 		},
-		"temperature": 0.7,
-	}
+	)
 
-	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request: %v", err)
+		// Log detailed error information
+		fmt.Printf("OpenAI API Error: %v\nModel: %s\n", err, a.config.Model)
+		return &AnalysisResult{
+			RootCause:  fmt.Sprintf("Error from OpenAI service: %v", err),
+			Confidence: 0.5,
+			Recommendations: []string{
+				"Check API key and permissions",
+				"Verify service endpoint configuration",
+				"Monitor system logs for detailed errors",
+			},
+			RelatedChanges: []string{},
+		}, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", a.config.Endpoint, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+	if len(resp.Choices) == 0 {
+		return &AnalysisResult{
+			RootCause:  "No analysis provided by OpenAI",
+			Confidence: 0.5,
+			Recommendations: []string{
+				"Retry the analysis",
+				"Check API configuration",
+				"Monitor system performance",
+			},
+			RelatedChanges: []string{},
+		}, nil
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.config.APIKey))
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var response struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("error decoding response: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response from LLM")
-	}
-
+	// Try to parse the response as JSON first
 	var result AnalysisResult
-	if err := json.Unmarshal([]byte(response.Choices[0].Message.Content), &result); err != nil {
-		return nil, fmt.Errorf("error parsing LLM response: %v", err)
+	if err := json.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		// If JSON parsing fails, use the raw response
+		result = AnalysisResult{
+			RootCause:  resp.Choices[0].Message.Content,
+			Confidence: 0.8,
+			Recommendations: []string{
+				"Monitor the payment gateway status",
+				"Check for any recent deployments or changes",
+				"Verify network connectivity",
+			},
+			RelatedChanges: []string{},
+		}
 	}
 
 	return &result, nil
@@ -108,7 +144,7 @@ Previous Success Rate: %.2f%%
 Drop Percentage: %.2f%%
 Timestamp: %s
 
-Recent Changes:
+Recent GitHub Changes:
 %s
 
 Recent Logs:
@@ -122,6 +158,9 @@ Please analyze this information and provide:
 2. Your confidence level in this analysis (0-1)
 3. Recommended actions to address the issue
 4. Any related code changes that might be contributing to the problem
+
+When referencing GitHub changes, use ONLY the actual commits and PRs provided in the "Recent GitHub Changes" section.
+DO NOT make up or guess commit hashes, PR numbers, or changes that are not explicitly listed.
 
 Format your response as a JSON object with the following structure:
 {
@@ -146,14 +185,30 @@ Format your response as a JSON object with the following structure:
 }
 
 func (a *Analyzer) formatGitHubChanges(changes []models.GitHubChange) string {
+	if len(changes) == 0 {
+		return "No recent changes found."
+	}
+
 	var formatted string
 	for _, change := range changes {
-		formatted += fmt.Sprintf("- %s by %s at %s: %s\n",
-			change.CommitID,
-			change.Author,
-			change.Timestamp.Format(time.RFC3339),
-			change.Message,
-		)
+		if strings.HasPrefix(change.CommitID, "PR #") {
+			formatted += fmt.Sprintf("- Pull Request %s in %s by %s at %s: %s\n",
+				change.CommitID,
+				change.Repo,
+				change.Author,
+				change.Timestamp.Format(time.RFC3339),
+				change.Message,
+			)
+		} else {
+			formatted += fmt.Sprintf("- Commit %s in %s by %s at %s: %s\n  Files changed: %s\n",
+				change.CommitID,
+				change.Repo,
+				change.Author,
+				change.Timestamp.Format(time.RFC3339),
+				change.Message,
+				strings.Join(change.FilesChanged, ", "),
+			)
+		}
 	}
 	return formatted
 }
@@ -180,4 +235,4 @@ func (a *Analyzer) formatExperiments(experiments []models.Experiment) string {
 		)
 	}
 	return formatted
-} 
+}

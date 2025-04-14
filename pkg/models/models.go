@@ -9,26 +9,26 @@ import (
 
 // PaymentStats represents the statistics for a specific dimension
 type PaymentStats struct {
-	Dimension     string
-	Value         string
-	Total         int
-	Successful    int
-	SuccessRate   float64
-	PreviousRate  float64
+	Dimension      string
+	Value          string
+	Total          int
+	Successful     int
+	SuccessRate    float64
+	PreviousRate   float64
 	DropPercentage float64
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // Alert represents an alert generated when success rate drops
 type Alert struct {
-	ID            string
-	Dimension     string
-	Value         string
-	CurrentRate   float64
-	PreviousRate  float64
+	ID             string
+	Dimension      string
+	Value          string
+	CurrentRate    float64
+	PreviousRate   float64
 	DropPercentage float64
-	Timestamp     time.Time
-	Context       *AnalysisContext
+	Timestamp      time.Time
+	Context        *AnalysisContext
 }
 
 // AnalysisContext contains all the context data for LLM analysis
@@ -69,45 +69,45 @@ type Experiment struct {
 
 // Payment represents a payment transaction
 type Payment struct {
-	ID               string    `gorm:"primaryKey"`
-	MerchantID       string    `gorm:"index"`
-	PaymentID        string    `gorm:"index"`
-	Amount           int64
-	Currency         string
-	Status           string
-	Method           string
-	Description      string
-	Email            string
-	Contact          string
-	Notes            string
-	AutoCaptured     int16
-	CallbackURL      string
-	Verified         int16
-	Disputed         int16
-	OnHold           int16
-	CustomerID       string
-	GlobalCustomerID string
-	TokenID          string
-	LateAuthorized   int16
-	GatewayCaptured  int16
-	AmountRefunded   int64
+	ID                string `gorm:"primaryKey"`
+	MerchantID        string `gorm:"index"`
+	PaymentID         string `gorm:"index"`
+	Amount            int64
+	Currency          string
+	Status            string
+	Method            string
+	Description       string
+	Email             string
+	Contact           string
+	Notes             string
+	AutoCaptured      int16
+	CallbackURL       string
+	Verified          int16
+	Disputed          int16
+	OnHold            int16
+	CustomerID        string
+	GlobalCustomerID  string
+	TokenID           string
+	LateAuthorized    int16
+	GatewayCaptured   int16
+	AmountRefunded    int64
 	AmountTransferred int64
-	RefundStatus     string
-	AuthorizedAt     int
-	RefundedAt       int
-	RefundAt         int
-	CapturedAt       int
-	AuthenticatedAt  int
-	SettledBy        string
-	InstrumentID     string
-	TerminalID       string
-	Gateway          string
-	FeeData          JSONB
-	Error            JSONB
-	AcquirerData     JSONB
-	JournalID        string
-	Wallet           string
-	BaseAmount       int64
+	RefundStatus      string
+	AuthorizedAt      int
+	RefundedAt        int
+	RefundAt          int
+	CapturedAt        int
+	AuthenticatedAt   int
+	SettledBy         string
+	InstrumentID      string
+	TerminalID        string
+	Gateway           string
+	FeeData           JSONB
+	Error             JSONB
+	AcquirerData      JSONB
+	JournalID         string
+	Wallet            string
+	BaseAmount        int64
 }
 
 // TableName specifies the table name for Payment model
@@ -142,4 +142,4 @@ func (j JSONB) Value() (driver.Value, error) {
 // GormDataType implements the GORM interface for JSONB
 func (JSONB) GormDataType() string {
 	return "jsonb"
-} 
+}

@@ -5,6 +5,7 @@ go 1.23
 toolchain go1.24.0
 
 require (
+	github.com/sashabaranov/go-openai v1.38.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/postgres v1.5.4
 	gorm.io/gorm v1.25.5

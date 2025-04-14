@@ -14,7 +14,7 @@ func RunMigrations() {
 		return
 	}
 
-	dsn := "postgres://bheemisetty.v:@localhost:5433/optimizer_core_live?sslmode=disable"
+	dsn := "postgres://optimizer_core_local:@localhost:5432/optimizer_core_live?sslmode=disable"
 
 	switch os.Args[1] {
 	case "normal":
@@ -39,4 +39,4 @@ func RunMigrations() {
 	default:
 		println("Invalid argument. Use 'normal', 'alert', or 'delete'")
 	}
-} 
+}

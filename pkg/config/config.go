@@ -8,10 +8,10 @@ import (
 
 type Config struct {
 	Monitoring struct {
-		Interval     int     `yaml:"interval"`
-		Threshold    float64 `yaml:"success_rate_drop"`
-		MinTransactions int `yaml:"minimum_transactions"`
-		Dimensions   []struct {
+		Interval        int     `yaml:"interval"`
+		Threshold       float64 `yaml:"success_rate_drop"`
+		MinTransactions int     `yaml:"minimum_transactions"`
+		Dimensions      []struct {
 			Name    string `yaml:"name"`
 			Enabled bool   `yaml:"enabled"`
 		} `yaml:"dimensions"`
@@ -27,9 +27,12 @@ type Config struct {
 	} `yaml:"database"`
 
 	LLM struct {
-		APIKey   string `yaml:"api_key"`
-		Model    string `yaml:"model"`
-		Endpoint string `yaml:"endpoint"`
+		APIKey     string `yaml:"api_key"`
+		Model      string `yaml:"model"`
+		Endpoint   string `yaml:"endpoint"`
+		Deployment string `yaml:"deployment"`
+		APIVersion string `yaml:"api_version"`
+		APIType    string `yaml:"api_type"`
 	} `yaml:"llm"`
 
 	ContextBuilder struct {
@@ -43,7 +46,7 @@ type Config struct {
 			Path    string `yaml:"path"`
 		} `yaml:"logs"`
 		Experiments struct {
-			Enabled bool   `yaml:"enabled"`
+			Enabled  bool   `yaml:"enabled"`
 			Endpoint string `yaml:"endpoint"`
 		} `yaml:"experiments"`
 	} `yaml:"context_builder"`
@@ -62,4 +65,4 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &config, nil
-} 
+}

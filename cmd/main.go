@@ -44,19 +44,19 @@ func main() {
 
 	// Initialize components
 	observerConfig := &observer.Config{
-		Interval:     time.Duration(cfg.Monitoring.Interval) * time.Second,
-		Threshold:    cfg.Monitoring.Threshold,
+		Interval:        time.Duration(cfg.Monitoring.Interval) * time.Second,
+		Threshold:       cfg.Monitoring.Threshold,
 		MinTransactions: cfg.Monitoring.MinTransactions,
-		Dimensions:   getEnabledDimensions(cfg),
+		Dimensions:      getEnabledDimensions(cfg),
 	}
 
 	observer := observer.NewObserver(db, observerConfig, alertChan)
 
 	contextBuilderConfig := &contextbuilder.Config{
-		GitHubToken:   cfg.ContextBuilder.GitHub.Token,
-		GitHubRepos:   cfg.ContextBuilder.GitHub.Repos,
-		LogPath:       cfg.ContextBuilder.Logs.Path,
-		ExperimentURL: cfg.ContextBuilder.Experiments.Endpoint,
+		GitHubToken:       cfg.ContextBuilder.GitHub.Token,
+		GitHubRepos:       cfg.ContextBuilder.GitHub.Repos,
+		LogPath:           cfg.ContextBuilder.Logs.Path,
+		ExperimentURL:     cfg.ContextBuilder.Experiments.Endpoint,
 		MaxCommitsPerRepo: 10,
 		LookbackHours:     24,
 	}
@@ -64,9 +64,12 @@ func main() {
 	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig)
 
 	llmConfig := &llm.Config{
-		APIKey:   cfg.LLM.APIKey,
-		Model:    cfg.LLM.Model,
-		Endpoint: cfg.LLM.Endpoint,
+		APIKey:     cfg.LLM.APIKey,
+		Model:      cfg.LLM.Model,
+		Endpoint:   cfg.LLM.Endpoint,
+		Deployment: cfg.LLM.Deployment,
+		APIVersion: cfg.LLM.APIVersion,
+		APIType:    cfg.LLM.APIType,
 	}
 
 	analyzer := llm.NewAnalyzer(llmConfig)
@@ -88,14 +91,14 @@ func main() {
 
 func initDB(cfg *config.Config) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-	cfg.Database.User,
-	cfg.Database.Password,
-	cfg.Database.Host,
-	cfg.Database.Port,
-	cfg.Database.DBName,
-	cfg.Database.SSLMode,
-)
-	fmt.Println("dsn", dsn)	
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.DBName,
+		cfg.Database.SSLMode,
+	)
+	fmt.Println("dsn", dsn)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -157,4 +160,4 @@ func processAlerts(
 			time.Sleep(1 * time.Second)
 		}
 	}
-} 
+}

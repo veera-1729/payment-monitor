@@ -15,6 +15,13 @@ func InsertNormalPayments(dsn string) {
 		panic("failed to connect database")
 	}
 
+	// Clear existing payments
+	if err := db.Exec("TRUNCATE TABLE payments").Error; err != nil {
+		fmt.Printf("Error clearing existing payments: %v\n", err)
+		return
+	}
+	fmt.Println("Cleared existing payments")
+
 	// Get current timestamp
 	now := time.Now().Unix()
 
@@ -119,4 +126,4 @@ func InsertNormalPayments(dsn string) {
 	}
 
 	fmt.Println("All normal payments inserted successfully!")
-} 
+}

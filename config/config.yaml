@@ -14,30 +14,31 @@ monitoring:
 
 database:
   host: "localhost"
-  port: 5433
-  user: "bheemisetty.v"
+  port: 5432
+  user: ""
   password: ""
   dbname: "optimizer_core_live"
   sslmode: "disable"
 
 llm:
-  api_key: ""  # To be filled with actual API key
-  model: "gpt-4"
-  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key: ""
+  model: ""
+  endpoint: ""  # Azure OpenAI resource name
+  deployment: ""
+  api_version: ""
+  api_type: "azure"
 
 context_builder:
   github:
     enabled: true
-    token: ""
-    repos:
-      - "https://github.com/razorpay/integrations-go"
-      - "https://github.com/razorpay/optimizer-core/"
-      - "https://github.com/razorpay/payments-protocol"
-    max_commits_per_repo: 5  # Maximum number of commits to fetch per repository
-    lookback_hours: 24       # Number of hours to look back for changes
+    token: ""  # Add your GitHub token here
+    repos: 
+      - "razorpay/integrations-go"
+    max_commits_per_repo: 10
+    lookback_hours: 24
   logs:
-    enabled: false
+    enabled: true
     path: "/var/log/payments"
   experiments:
     enabled: false
-    endpoint: "http://experiment-service/api/active" 
+    endpoint: "" 
