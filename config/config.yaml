@@ -1,0 +1,43 @@
+monitoring:
+  interval: 30  # Polling interval in seconds
+  thresholds:
+    success_rate_drop: 5.0  # Percentage drop to trigger alert
+    minimum_transactions: 1  # Minimum transactions to consider for analysis
+
+  dimensions:
+    - name: gateway
+      enabled: true
+    - name: gateway_payment_method
+      enabled: false
+    - name: gateway_merchant
+      enabled: false
+
+database:
+  host: "localhost"
+  port: 5433
+  user: "bheemisetty.v"
+  password: ""
+  dbname: "optimizer-core-live"
+  sslmode: "disable"
+
+llm:
+  api_key: ""  # To be filled with actual API key
+  model: "gpt-4"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+
+context_builder:
+  github:
+    enabled: true
+    token: ""  # GitHub API token
+    repos:
+      - "https://github.com/razorpay/integrations-go"
+      - "https://github.com/razorpay/optimizer-core/"
+      - "https://github.com/razorpay/payments-protocol"
+    max_commits_per_repo: 5  # Maximum number of commits to fetch per repository
+    lookback_hours: 24       # Number of hours to look back for changes
+  logs:
+    enabled: false
+    path: "/var/log/payments"
+  experiments:
+    enabled: false
+    endpoint: "http://experiment-service/api/active" 
