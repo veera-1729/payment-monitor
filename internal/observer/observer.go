@@ -3,6 +3,7 @@ package observer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/yourusername/payment-monitor/pkg/models"
@@ -70,6 +71,30 @@ func (o *Observer) checkDimensions() {
 					DropPercentage: stat.DropPercentage,
 					Timestamp:      time.Now(),
 				}
+
+				// Add dimension-specific fields
+				switch dimension {
+				case "gateway":
+					fmt.Println("gateway alert triggered for ", stat.Value)
+					alert.Gateway = stat.Value
+				case "gateway_method":
+					// Split the value into gateway and method
+					parts := strings.Split(stat.Value, "_")
+					if len(parts) == 2 {
+						alert.Gateway = parts[0]
+						alert.Method = parts[1]
+					}
+					fmt.Println("gateway method alert triggered for gateway", alert.Gateway, " method ", alert.Method)
+				case "gateway_merchant":
+					// Split the value into gateway and merchant_id
+					parts := strings.Split(stat.Value, "_")
+					if len(parts) == 2 {
+						alert.Gateway = parts[0]
+						alert.MerchantID = parts[1]
+					}
+					fmt.Println("gateway merchant alert triggered for gateway", alert.Gateway, " merchantID ", alert.MerchantID)
+				}
+				
 				o.alertChannel <- alert
 			}
 		}
@@ -112,11 +137,14 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 		return nil, err
 	}
 
+	fmt.Println("currentStats", currentStats)
+
 	var previousStats []struct {
 		Gateway     string
 		SuccessRate float64
 	}
 
+	fmt.Println("previousStats", previousStats)
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
@@ -144,6 +172,7 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 		})
 	}
 
+	fmt.Println("stats", stats)
 	return stats, nil
 }
 

@@ -29,6 +29,9 @@ type Alert struct {
 	DropPercentage float64
 	Timestamp     time.Time
 	Context       *AnalysisContext
+	Gateway       string
+	Method        string
+	MerchantID    string
 }
 
 // AnalysisContext contains all the context data for LLM analysis

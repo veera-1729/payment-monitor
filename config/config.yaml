@@ -1,8 +1,8 @@
 monitoring:
   interval: 5  # Polling interval in seconds
   thresholds:
-    success_rate_drop: 5.0  # Percentage drop to trigger alert
-    minimum_transactions: 1  # Minimum transactions to consider for analysis
+    success_rate_drop: 30  # Percentage drop to trigger alert
+    minimum_transactions: 5  # Minimum transactions to consider for analysis
 
   dimensions:
     - name: gateway
