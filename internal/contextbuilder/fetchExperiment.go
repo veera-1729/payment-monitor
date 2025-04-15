@@ -61,17 +61,21 @@ func (b *ContextBuilder) processExperiment(id string,) (models.ExperimentPair, e
 }
 
 // Fetch data for all experiments and store as previous data
-func (b *ContextBuilder) FetchAndStorePreviousData(expIDs [] config.ExperimentID) {
-    
+func (b *ContextBuilder) FetchAndStorePreviousData(expIDs []config.ExperimentID) {    
     // Fetch each experiment and store in Redis as PREVIOUS data
     for _, id := range expIDs {
         exp, err := b.FetchExperiment(id.ID)
         if err != nil {
-            log.Printf("Error fetching experiment %s: %v", id, err)
+            log.Printf("Error fetching experiment %s: %v", id.ID, err)
             continue
         }
         
         // Store directly as previous data
-        b.StorePreviousExperiment(exp)
+        err = b.StorePreviousExperiment(exp)
+        if err != nil {
+            log.Printf("Error storing experiment %s: %v", id.ID, err)
+        }
     }
+    
+    log.Printf("Finished processing all %d experiments", len(expIDs))
 }

@@ -46,6 +46,21 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	contextBuilderConfig := &contextbuilder.Config{
+		GitHubToken:   cfg.ContextBuilder.GitHub.Token,
+		GitHubRepos:   cfg.ContextBuilder.GitHub.Repos,
+		LogPath:       cfg.ContextBuilder.Logs.Path,
+		ExperimentURL: cfg.ContextBuilder.Experiments.ApiUrl,
+		MaxCommitsPerRepo: 10,
+		LookbackHours:     24,
+		SplitzToken:   cfg.ContextBuilder.Experiments.SplitzToken,
+		ExperimentIds: cfg.ContextBuilder.Experiments.ExperimentIds,
+	}
+
+	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig, initRedis(cfg))
+
+	contextBuilder.FetchAndStorePreviousData(cfg.ContextBuilder.Experiments.ExperimentIds)
+
 	// Create alert channel
 	alertChannel := make(chan *models.Alert, 100)
 
@@ -94,22 +109,7 @@ func main() {
 		Addr:    serverAddr,
 		Handler: mux,
 	}
-
-	// Initialize context builder
-	contextBuilderConfig := &contextbuilder.Config{
-		GitHubToken:       cfg.ContextBuilder.GitHub.Token,
-		GitHubRepos:       cfg.ContextBuilder.GitHub.Repos,
-		LogPath:           cfg.ContextBuilder.Logs.Path,
-		ExperimentURL:     cfg.ContextBuilder.Experiments.ApiUrl,
-		MaxCommitsPerRepo: 10,
-		LookbackHours:     24,
-		SplitzToken:       cfg.ContextBuilder.Experiments.SplitzToken,
-		ExperimentIds:     cfg.ContextBuilder.Experiments.ExperimentIds,
-	}
-
-	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig, initRedis(cfg))
-	contextBuilder.FetchAndStorePreviousData(cfg.ContextBuilder.Experiments.ExperimentIds)
-
+	
 	// Initialize LLM analyzer
 	llmConfig := &llm.Config{
 		APIKey:     cfg.LLM.APIKey,
@@ -174,14 +174,6 @@ func initDB(cfg *config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
-func initRedis(cfg *config.Config) *redis.Client {
-	return redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-	})
-}
-
 func getEnabledDimensions(cfg *config.Config) []string {
 	var dimensions []string
 	for _, dim := range cfg.Monitoring.Dimensions {
@@ -238,4 +230,29 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 			}
 		}
 	}
+} 
+
+func initRedis(cfg *config.Config) *redis.Client {
+    // Use a default Redis address if not specified in config
+    addr := "localhost:6379"
+    if cfg.Redis.Host != "" && cfg.Redis.Port > 0 {
+        addr = fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)
+    }
+    
+    // Initialize Redis client
+    rdb := redis.NewClient(&redis.Options{
+        Addr:     addr,
+        Password: cfg.Redis.Password, // no password set
+        DB:       cfg.Redis.DB,       // use default DB
+    })
+    
+    // Test the connection
+    _, err := rdb.Ping().Result()
+    if err != nil {
+        log.Printf("WARNING: Redis connection failed: %v", err)
+    } else {
+        log.Println("Successfully connected to Redis at %v", addr)
+    }
+    
+    return rdb
 }

@@ -6,10 +6,10 @@ toolchain go1.24.0
 
 require (
 	github.com/gorilla/websocket v1.5.1
-	github.com/sashabaranov/go-openai v1.20.2
+	github.com/sashabaranov/go-openai v1.38.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/postgres v1.5.7
-	gorm.io/gorm v1.25.7
+	gorm.io/gorm v1.25.12
 )
 
 require (
