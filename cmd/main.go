@@ -109,7 +109,7 @@ func main() {
 		Addr:    serverAddr,
 		Handler: mux,
 	}
-	
+
 	// Initialize LLM analyzer
 	llmConfig := &llm.Config{
 		APIKey:     cfg.LLM.APIKey,
@@ -251,7 +251,7 @@ func initRedis(cfg *config.Config) *redis.Client {
     if err != nil {
         log.Printf("WARNING: Redis connection failed: %v", err)
     } else {
-        log.Println("Successfully connected to Redis at %v", addr)
+        log.Printf("Successfully connected to Redis at %v", addr)
     }
     
     return rdb
