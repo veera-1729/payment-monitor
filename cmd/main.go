@@ -203,10 +203,14 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 			}
 
 			// Build context for the alert
-			alertContext := contextBuilder.BuildContext(alert)
+			alertContext, err := contextBuilder.BuildContext(context.TODO(), alert)
+			if err != nil {
+				log.Printf("Error building context: %v", err)
+				continue
+			}
 
 			// Analyze the alert with context
-			analysis, err := analyzer.Analyze(alertContext)
+			analysis, err := analyzer.Analyze(context.TODO(), alertContext)
 			if err != nil {
 				log.Printf("Error analyzing alert: %v", err)
 				continue

@@ -12,25 +12,7 @@ import (
 	"github.com/yourusername/payment-monitor/pkg/models"
 )
 
-<<<<<<< HEAD
-type ContextBuilder struct {
-	config *Config
-	client *http.Client
-}
-
-type Config struct {
-	GitHubToken       string
-	GitHubRepos       []string
-	LogPath           string
-	ExperimentURL     string
-	MaxCommitsPerRepo int
-	LookbackHours     int
-}
-
-func NewContextBuilder(config *Config) *ContextBuilder {
-=======
 func NewContextBuilder(config *Config, redis *redis.Client) *ContextBuilder {
->>>>>>> master
 	if config.MaxCommitsPerRepo == 0 {
 		config.MaxCommitsPerRepo = 10
 	}
@@ -38,8 +20,8 @@ func NewContextBuilder(config *Config, redis *redis.Client) *ContextBuilder {
 		config.LookbackHours = 24
 	}
 	return &ContextBuilder{
-		config: config,
-		client: &http.Client{Timeout: 10 * time.Second},
+		config:      config,
+		client:      &http.Client{Timeout: 10 * time.Second},
 		redisClient: redis,
 	}
 }
@@ -233,32 +215,15 @@ func (b *ContextBuilder) getRecentLogs(ctx context.Context) ([]models.LogEntry, 
 	// Implement log reading logic based on your logging system
 	// This is a placeholder implementation
 	return []models.LogEntry{}, nil
-} 
+}
 
 // Handler for the /build-context endpoint
 func (b *ContextBuilder) getActiveExperiments(ctx context.Context) []models.ExperimentPair {
-    
-    // Collect experiment pairs
-    experimentPairs, err := b.CollectExperimentPairs(ctx)
-    if err != nil {
-        fmt.Printf("Error collecting experiment pairs: %v \n", err)
-    }
-
-<<<<<<< HEAD
-	resp, err := b.client.Do(req)
+	// Collect experiment pairs
+	experimentPairs, err := b.CollectExperimentPairs(ctx)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var experiments []models.Experiment
-	if err := json.NewDecoder(resp.Body).Decode(&experiments); err != nil {
-		return nil, err
+		fmt.Printf("Error collecting experiment pairs: %v \n", err)
 	}
 
-	return experiments, nil
-}
-=======
 	return experimentPairs
 }
->>>>>>> master

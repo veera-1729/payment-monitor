@@ -21,17 +21,20 @@ type PaymentStats struct {
 
 // Alert represents an alert generated when success rate drops
 type Alert struct {
-	ID             string
-	Dimension      string
-	Value          string
-	CurrentRate    float64
-	PreviousRate   float64
-	DropPercentage float64
-	Timestamp      time.Time
-	Context        *AnalysisContext
-	Gateway        string
-	Method         string
-	MerchantID     string
+	ID              string
+	Dimension       string
+	Value           string
+	CurrentRate     float64
+	PreviousRate    float64
+	DropPercentage  float64
+	Timestamp       time.Time
+	Context         *AnalysisContext
+	Gateway         string
+	Method          string
+	MerchantID      string
+	RootCause       string
+	Confidence      float64
+	Recommendations []string
 }
 
 // AnalysisContext contains all the context data for LLM analysis
