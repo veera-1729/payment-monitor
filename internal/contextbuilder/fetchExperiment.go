@@ -2,11 +2,12 @@ package contextbuilder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
+	"github.com/yourusername/payment-monitor/pkg/config"
 	"github.com/yourusername/payment-monitor/pkg/models"
-    "github.com/yourusername/payment-monitor/pkg/config"
 )
 
 // Collect current and previous experiment data for all experiments
@@ -26,7 +27,13 @@ func (b *ContextBuilder) CollectExperimentPairs (ctx context.Context) ([]models.
             continue
         }
         
-        experimentPairs = append(experimentPairs, pair)
+        // Check if there's a difference between current and previous data
+        if hasExperimentChanged(pair) {
+            log.Printf("Found change in experiment %s, adding to results", id.ID)
+            experimentPairs = append(experimentPairs, pair)
+        } else {
+            log.Printf("No change detected in experiment %s, skipping", id.ID)
+        }
     }
     
     if len(experimentPairs) == 0 {
@@ -34,6 +41,27 @@ func (b *ContextBuilder) CollectExperimentPairs (ctx context.Context) ([]models.
     }
     
     return experimentPairs, nil
+}
+
+// hasExperimentChanged determines if there's a difference between current and previous experiment data
+func hasExperimentChanged(pair models.ExperimentPair) bool {
+    // Ensure both current and previous exist
+    if pair.Current == nil || pair.Previous == nil {
+        // If either is nil, consider it a change
+        return true
+    }
+    
+    // Convert audience to JSON strings for comparison
+    currentJSON, err1 := json.Marshal(pair.Current.Audience)
+    previousJSON, err2 := json.Marshal(pair.Previous.Audience)
+    
+    // If marshaling fails, consider it a change
+    if err1 != nil || err2 != nil {
+        return true
+    }
+    
+    // Compare the JSON strings
+    return string(currentJSON) != string(previousJSON)
 }
 
 // Process a single experiment: get previous data, fetch current data, update storage

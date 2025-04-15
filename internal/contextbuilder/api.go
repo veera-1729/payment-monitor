@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -43,7 +43,7 @@ func (b *ContextBuilder) FetchExperiment(id string) (*models.StoredExperiment, e
 	defer resp.Body.Close()
 
 	// Read response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
