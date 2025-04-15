@@ -119,4 +119,4 @@ func InsertNormalPayments(dsn string) {
 	}
 
 	fmt.Println("All normal payments inserted successfully!")
-} 
+}

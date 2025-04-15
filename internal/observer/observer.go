@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yourusername/payment-monitor/internal/websocket"
 	"github.com/yourusername/payment-monitor/pkg/models"
 	"gorm.io/gorm"
 )
@@ -14,6 +15,7 @@ type Observer struct {
 	db           *gorm.DB
 	config       *Config
 	alertChannel chan<- *models.Alert
+	hub          *websocket.Hub
 }
 
 type Config struct {
@@ -23,11 +25,12 @@ type Config struct {
 	Dimensions      []string
 }
 
-func NewObserver(db *gorm.DB, config *Config, alertChannel chan<- *models.Alert) *Observer {
+func NewObserver(db *gorm.DB, config *Config, alertChannel chan<- *models.Alert, hub *websocket.Hub) *Observer {
 	return &Observer{
 		db:           db,
 		config:       config,
 		alertChannel: alertChannel,
+		hub:          hub,
 	}
 }
 
@@ -56,13 +59,23 @@ func (o *Observer) checkDimensions() {
 		}
 
 		for _, stat := range stats {
+			// Send metrics through WebSocket
+			o.hub.BroadcastMetrics(&websocket.MetricsMessage{
+				Type:        "metrics",
+				Dimension:   stat.Dimension,
+				Value:       stat.Value,
+				SuccessRate: stat.SuccessRate,
+				Timestamp:   stat.Timestamp,
+			})
+
 			if stat.Total < o.config.MinTransactions {
 				continue
 			}
 			fmt.Println("current drop percentage", stat.DropPercentage)
 			fmt.Println("threshold ", o.config.Threshold)
 			if stat.DropPercentage > o.config.Threshold {
-				fmt.Println("alerting for dimension", dimension, stat.Value)
+				fmt.Println(stat)
+				fmt.Printf("alerting for dimension %s drop %f\n", dimension, stat.DropPercentage)
 				alert := &models.Alert{
 					ID:             fmt.Sprintf("%s-%s-%d", dimension, stat.Value, time.Now().Unix()),
 					Dimension:      dimension,
@@ -95,7 +108,7 @@ func (o *Observer) checkDimensions() {
 					}
 					fmt.Println("gateway merchant alert triggered for gateway", alert.Gateway, " merchantID ", alert.MerchantID)
 				}
-				
+
 				o.alertChannel <- alert
 			}
 		}
@@ -148,7 +161,7 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)",
 			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway").
 		Scan(&previousStats).Error; err != nil {
@@ -160,7 +173,7 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRate(previousStats, current.Gateway)
-		dropPercentage := previousRate - current.SuccessRate // Changed to show positive drop percentage
+		dropPercentage := previousRate - current.SuccessRate // Show positive drop percentage
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway",
@@ -218,7 +231,7 @@ func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, method, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)",
 			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway, method").
 		Scan(&previousStats).Error; err != nil {
@@ -229,7 +242,7 @@ func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRateForGatewayMethod(previousStats, current.Gateway, current.Method)
-		dropPercentage := previousRate - current.SuccessRate
+		dropPercentage := previousRate - current.SuccessRate // Show positive drop percentage
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway_method",
@@ -275,7 +288,7 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, merchant_id, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)",
 			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway, merchant_id").
 		Scan(&previousStats).Error; err != nil {
@@ -286,7 +299,7 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRateForGatewayMerchant(previousStats, current.Gateway, current.MerchantID)
-		dropPercentage := previousRate - current.SuccessRate
+		dropPercentage := previousRate - current.SuccessRate // Show positive drop percentage
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway_merchant",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,19 +12,30 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	"github.com/gorilla/websocket"
 	"github.com/yourusername/payment-monitor/internal/contextbuilder"
 	"github.com/yourusername/payment-monitor/internal/llm"
 	"github.com/yourusername/payment-monitor/internal/observer"
 	"github.com/yourusername/payment-monitor/internal/seeder"
+	wshandler "github.com/yourusername/payment-monitor/internal/websocket"
 	"github.com/yourusername/payment-monitor/pkg/config"
 	"github.com/yourusername/payment-monitor/pkg/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins in development
+	},
+}
+
 func main() {
 	// Load configuration
-	cfg, err := config.LoadConfig("config/config.yaml")
+	configPath := flag.String("config", "config/config.yaml", "path to config file")
+	flag.Parse()
+
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -37,34 +49,85 @@ func main() {
 	// Create alert channel
 	alertChannel := make(chan *models.Alert, 100)
 
-	// Initialize observer
+	// Initialize WebSocket hub
+	hub := wshandler.NewHub()
+	go hub.Run()
+
+	// Initialize components
 	observerConfig := &observer.Config{
 		Interval:        time.Duration(cfg.Monitoring.Interval) * time.Second,
 		Threshold:       cfg.Monitoring.Thresholds.SuccessRateDrop,
 		MinTransactions: cfg.Monitoring.Thresholds.MinTransactions,
 		Dimensions:      getEnabledDimensions(cfg),
 	}
-	obs := observer.NewObserver(db, observerConfig, alertChannel)
+
+	obs := observer.NewObserver(db, observerConfig, alertChannel, hub)
 
 	// Initialize seeder
 	seed := seeder.NewSeeder(db)
 
-	// Create HTTP server
+	// Create HTTP server mux
 	mux := http.NewServeMux()
 	seed.RegisterRoutes(mux)
 
+	// Add WebSocket handler
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("Error upgrading connection: %v", err)
+			return
+		}
+
+		client := &wshandler.Client{
+			Conn: conn,
+			Send: make(chan []byte, 256),
+		}
+
+		hub.Register <- client
+		go client.WritePump()
+	})
+
 	// Set server address
-	serverAddr := ":8080" // Default address
+	serverAddr := ":8080"
 
 	server := &http.Server{
 		Addr:    serverAddr,
 		Handler: mux,
 	}
 
-	// Start observer in background
+	// Initialize context builder
+	contextBuilderConfig := &contextbuilder.Config{
+		GitHubToken:       cfg.ContextBuilder.GitHub.Token,
+		GitHubRepos:       cfg.ContextBuilder.GitHub.Repos,
+		LogPath:           cfg.ContextBuilder.Logs.Path,
+		ExperimentURL:     cfg.ContextBuilder.Experiments.ApiUrl,
+		MaxCommitsPerRepo: 10,
+		LookbackHours:     24,
+		SplitzToken:       cfg.ContextBuilder.Experiments.SplitzToken,
+		ExperimentIds:     cfg.ContextBuilder.Experiments.ExperimentIds,
+	}
+
+	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig, initRedis(cfg))
+	contextBuilder.FetchAndStorePreviousData(cfg.ContextBuilder.Experiments.ExperimentIds)
+
+	// Initialize LLM analyzer
+	llmConfig := &llm.Config{
+		APIKey:     cfg.LLM.APIKey,
+		Model:      cfg.LLM.Model,
+		Endpoint:   cfg.LLM.Endpoint,
+		Deployment: cfg.LLM.Deployment,
+		APIVersion: cfg.LLM.APIVersion,
+		APIType:    cfg.LLM.APIType,
+	}
+
+	analyzer := llm.NewAnalyzer(llmConfig)
+
+	// Start components
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	go obs.Start(ctx)
+	go processAlerts(ctx, alertChannel, contextBuilder, analyzer, hub)
 
 	// Start HTTP server in background
 	go func() {
@@ -74,22 +137,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
-	contextBuilderConfig := &contextbuilder.Config{
-		GitHubToken:   cfg.ContextBuilder.GitHub.Token,
-		GitHubRepos:   cfg.ContextBuilder.GitHub.Repos,
-		LogPath:       cfg.ContextBuilder.Logs.Path,
-		ExperimentURL: cfg.ContextBuilder.Experiments.ApiUrl,
-		MaxCommitsPerRepo: 10,
-		LookbackHours:     24,
-		SplitzToken:   cfg.ContextBuilder.Experiments.SplitzToken,
-		ExperimentIds: cfg.ContextBuilder.Experiments.ExperimentIds,
-	}
-
-	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig, initRedis(cfg))
-
-	contextBuilder.FetchAndStorePreviousData(cfg.ContextBuilder.Experiments.ExperimentIds)
-
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -97,22 +144,22 @@ func main() {
 
 	// Shutdown server
 	log.Println("Shutting down server...")
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown error: %v", err)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
 	}
 }
 
 func initDB(cfg *config.Config) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-	cfg.Database.User,
-	cfg.Database.Password,
-	cfg.Database.Host,
-	cfg.Database.Port,
-	cfg.Database.DBName,
-	cfg.Database.SSLMode,
-)
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.DBName,
+		cfg.Database.SSLMode,
+	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -127,6 +174,14 @@ func initDB(cfg *config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
+func initRedis(cfg *config.Config) *redis.Client {
+	return redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+}
+
 func getEnabledDimensions(cfg *config.Config) []string {
 	var dimensions []string
 	for _, dim := range cfg.Monitoring.Dimensions {
@@ -135,58 +190,41 @@ func getEnabledDimensions(cfg *config.Config) []string {
 		}
 	}
 	return dimensions
-} 
+}
 
-func processAlerts(
-	ctx context.Context,
-	alertChan <-chan *models.Alert,
-	contextBuilder *contextbuilder.ContextBuilder,
-	analyzer *llm.Analyzer,
-) {
+func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBuilder *contextbuilder.ContextBuilder, analyzer *llm.Analyzer, hub *wshandler.Hub) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case alert := <-alertChan:
-			go func(alert *models.Alert) {
-				// Build context
-				fmt.Println("Building context for alert", alert)
-				context, err := contextBuilder.BuildContext(ctx, alert)
-				if err != nil {
-					log.Printf("Error building context: %v", err)
-					return
-				}
+			if alert == nil {
+				continue
+			}
 
-				// Analyze with LLM
-				result, err := analyzer.Analyze(ctx, context)
-				if err != nil {
-					log.Printf("Error analyzing with LLM: %v", err)
-					return
-				}
+			// Build context for the alert
+			alertContext, err := contextBuilder.BuildContext(context.TODO(), alert)
+			if err != nil {
+				log.Printf("Error building context: %v", err)
+				continue
+			}
 
-				// Log the analysis result
-				log.Printf("Analysis for alert %s:\nRoot Cause: %s\nConfidence: %.2f\nRecommendations: %v\n",
-					alert.ID,
-					result.RootCause,
-					result.Confidence,
-					result.Recommendations,
-				)
+			// Analyze the alert with context
+			analysis, err := analyzer.Analyze(context.TODO(), alertContext)
+			if err != nil {
+				log.Printf("Error analyzing alert: %v", err)
+				continue
+			}
 
-				// TODO: Implement alert notification (e.g., Slack, email, etc.)
-			}(alert)
-		default:
-			fmt.Println("listening for alerts")
-			time.Sleep(1 * time.Second)
+			// Update alert with analysis
+			alert.RootCause = analysis.RootCause
+			alert.Confidence = analysis.Confidence
+			alert.Recommendations = analysis.Recommendations
+
+			// Broadcast alert to WebSocket clients
+			if hub != nil {
+				hub.Broadcast <- []byte(fmt.Sprintf("Alert: %+v", alert))
+			}
 		}
 	}
-} 
-
-func initRedis(cfg *config.Config) (*redis.Client) {
-    // Initialize Redis client
-    rdb := redis.NewClient(&redis.Options{
-        Addr:     cfg.Redis.Host + ":" + fmt.Sprint(cfg.Redis.Port),
-        Password: cfg.Redis.Password, // no password set
-        DB:       cfg.Redis.DB,  // use default DB
-    })
-	return rdb
 }

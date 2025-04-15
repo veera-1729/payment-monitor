@@ -14,7 +14,11 @@ func RunMigrations() {
 		return
 	}
 
+<<<<<<< HEAD
+	dsn := "postgres://optimizer_core_local:@localhost:5432/optimizer_core_live?sslmode=disable"
+=======
 	dsn := "postgres://lavdeep.singh:@localhost:5432/optimizer_core_live?sslmode=disable"
+>>>>>>> master
 
 	switch os.Args[1] {
 	case "normal":
@@ -39,4 +43,4 @@ func RunMigrations() {
 	default:
 		println("Invalid argument. Use 'normal', 'alert', or 'delete'")
 	}
-} 
+}

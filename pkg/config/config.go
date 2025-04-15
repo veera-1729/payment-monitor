@@ -8,12 +8,12 @@ import (
 
 type Config struct {
 	Monitoring struct {
-		Interval     int     `yaml:"interval"`
-		Thresholds   struct {
-			SuccessRateDrop    float64 `yaml:"success_rate_drop"`
-			MinTransactions    int     `yaml:"minimum_transactions"`
+		Interval   int `yaml:"interval"`
+		Thresholds struct {
+			SuccessRateDrop float64 `yaml:"success_rate_drop"`
+			MinTransactions int     `yaml:"minimum_transactions"`
 		} `yaml:"thresholds"`
-		Dimensions   []struct {
+		Dimensions []struct {
 			Name    string `yaml:"name"`
 			Enabled bool   `yaml:"enabled"`
 		} `yaml:"dimensions"`
@@ -29,25 +29,30 @@ type Config struct {
 	} `yaml:"database"`
 
 	LLM struct {
-		APIKey   string `yaml:"api_key"`
-		Model    string `yaml:"model"`
-		Endpoint string `yaml:"endpoint"`
+		APIKey     string `yaml:"api_key"`
+		Model      string `yaml:"model"`
+		Endpoint   string `yaml:"endpoint"`
+		Deployment string `yaml:"deployment"`
+		APIVersion string `yaml:"api_version"`
+		APIType    string `yaml:"api_type"`
 	} `yaml:"llm"`
 
 	ContextBuilder struct {
 		GitHub struct {
-			Enabled bool     `yaml:"enabled"`
-			Token   string   `yaml:"token"`
-			Repos   []string `yaml:"repos"`
+			Enabled           bool     `yaml:"enabled"`
+			Token             string   `yaml:"token"`
+			Repos             []string `yaml:"repos"`
+			MaxCommitsPerRepo int      `yaml:"max_commits_per_repo"`
+			LookbackHours     int      `yaml:"lookback_hours"`
 		} `yaml:"github"`
 		Logs struct {
 			Enabled bool   `yaml:"enabled"`
 			Path    string `yaml:"path"`
 		} `yaml:"logs"`
 		Experiments struct {
-			Enabled bool   `yaml:"enabled"`
-			ApiUrl string `yaml:"api_url"`
-			SplitzToken string`yaml:"splitz_token"`
+			Enabled       bool           `yaml:"enabled"`
+			ApiUrl        string         `yaml:"api_url"`
+			SplitzToken   string         `yaml:"splitz_token"`
 			ExperimentIds []ExperimentID `yaml:"experiment_ids"`
 		} `yaml:"experiments"`
 	} `yaml:"context_builder"`
@@ -61,9 +66,9 @@ type Config struct {
 }
 
 type ExperimentID struct {
-    ID          string `yaml:"id"`
-    Name        string `yaml:"name"`
-    Description string `yaml:"description"`
+	ID          string `yaml:"id"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
 }
 
 // LoadConfig loads the configuration from a YAML file
