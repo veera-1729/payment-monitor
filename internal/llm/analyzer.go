@@ -149,7 +149,7 @@ Recent GitHub Changes:
 Recent Logs:
 %s
 
-Active Experiments:
+Active Experiment Changes:
 %s
 
 Please analyze this information and provide:
@@ -229,7 +229,7 @@ func (a *Analyzer) formatLogs(logs []models.LogEntry) string {
 func (a *Analyzer) formatExperiments(experiments []models.ExperimentPair) string {
 	var formatted string
 	for _, exp := range experiments {
-		formatted += fmt.Sprintf("-ExperimentID: %s -PreviousExpermient: %s -CurrentExperiment: %s\n",
+		formatted += fmt.Sprintf("-|ExperimentID: %s -PreviousExpermient: %s -CurrentExperiment: %s\n",
 			exp.ExperimentID,
 			exp.Previous,
 			exp.Current,
