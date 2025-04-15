@@ -5,10 +5,11 @@ go 1.23
 toolchain go1.24.0
 
 require (
-	github.com/sashabaranov/go-openai v1.38.1
+	github.com/gorilla/websocket v1.5.1
+	github.com/sashabaranov/go-openai v1.20.2
 	gopkg.in/yaml.v2 v2.4.0
-	gorm.io/driver/postgres v1.5.4
-	gorm.io/gorm v1.25.5
+	gorm.io/driver/postgres v1.5.7
+	gorm.io/gorm v1.25.7
 )
 
 require (
@@ -20,5 +21,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 )

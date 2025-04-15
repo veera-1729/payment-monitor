@@ -5,14 +5,17 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/yourusername/payment-monitor/internal/contextbuilder"
 	"github.com/yourusername/payment-monitor/internal/llm"
 	"github.com/yourusername/payment-monitor/internal/observer"
+	wshandler "github.com/yourusername/payment-monitor/internal/websocket"
 	"github.com/yourusername/payment-monitor/pkg/config"
 	"github.com/yourusername/payment-monitor/pkg/models"
 	"github.com/yourusername/payment-monitor/scripts"
@@ -20,8 +23,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func main() {
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins in development
+	},
+}
 
+func main() {
 	scripts.RunMigrations()
 
 	configPath := flag.String("config", "config/config.yaml", "path to config file")
@@ -42,6 +50,10 @@ func main() {
 	alertChan := make(chan *models.Alert, 100)
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Initialize WebSocket hub
+	hub := wshandler.NewHub()
+	go hub.Run()
+
 	// Initialize components
 	observerConfig := &observer.Config{
 		Interval:        time.Duration(cfg.Monitoring.Interval) * time.Second,
@@ -50,7 +62,7 @@ func main() {
 		Dimensions:      getEnabledDimensions(cfg),
 	}
 
-	observer := observer.NewObserver(db, observerConfig, alertChan)
+	observer := observer.NewObserver(db, observerConfig, alertChan, hub)
 
 	contextBuilderConfig := &contextbuilder.Config{
 		GitHubToken:       cfg.ContextBuilder.GitHub.Token,
@@ -78,12 +90,47 @@ func main() {
 	go observer.Start(ctx)
 
 	// Start the alert processor
-	go processAlerts(ctx, alertChan, contextBuilder, analyzer)
+	go processAlerts(ctx, alertChan, contextBuilder, analyzer, hub)
+
+	// Set up HTTP server for WebSocket connections
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("Error upgrading connection: %v", err)
+			return
+		}
+
+		client := &wshandler.Client{
+			Conn: conn,
+			Send: make(chan []byte, 256),
+		}
+
+		hub.Register <- client
+		go client.WritePump()
+	})
+
+	// Start HTTP server
+	server := &http.Server{
+		Addr: ":8080",
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	}()
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
+
+	// Shutdown HTTP server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down server: %v", err)
+	}
 
 	cancel()
 	log.Println("Shutting down...")
@@ -123,6 +170,7 @@ func processAlerts(
 	alertChan <-chan *models.Alert,
 	contextBuilder *contextbuilder.ContextBuilder,
 	analyzer *llm.Analyzer,
+	hub *wshandler.Hub,
 ) {
 	for {
 		select {
@@ -152,6 +200,18 @@ func processAlerts(
 					result.Confidence,
 					result.Recommendations,
 				)
+
+				// Send alert to WebSocket clients
+				hub.BroadcastAlert(&wshandler.AlertMessage{
+					Type:           "alert",
+					ID:             alert.ID,
+					Dimension:      alert.Dimension,
+					Value:          alert.Value,
+					CurrentRate:    alert.CurrentRate,
+					PreviousRate:   alert.PreviousRate,
+					DropPercentage: alert.DropPercentage,
+					Timestamp:      alert.Timestamp,
+				})
 
 				// TODO: Implement alert notification (e.g., Slack, email, etc.)
 			}(alert)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/yourusername/payment-monitor/internal/websocket"
 	"github.com/yourusername/payment-monitor/pkg/models"
 	"gorm.io/gorm"
 )
@@ -13,6 +14,7 @@ type Observer struct {
 	db           *gorm.DB
 	config       *Config
 	alertChannel chan<- *models.Alert
+	hub          *websocket.Hub
 }
 
 type Config struct {
@@ -22,11 +24,12 @@ type Config struct {
 	Dimensions      []string
 }
 
-func NewObserver(db *gorm.DB, config *Config, alertChannel chan<- *models.Alert) *Observer {
+func NewObserver(db *gorm.DB, config *Config, alertChannel chan<- *models.Alert, hub *websocket.Hub) *Observer {
 	return &Observer{
 		db:           db,
 		config:       config,
 		alertChannel: alertChannel,
+		hub:          hub,
 	}
 }
 
@@ -55,12 +58,22 @@ func (o *Observer) checkDimensions() {
 		}
 
 		for _, stat := range stats {
+			// Send metrics through WebSocket
+			o.hub.BroadcastMetrics(&websocket.MetricsMessage{
+				Type:        "metrics",
+				Dimension:   stat.Dimension,
+				Value:       stat.Value,
+				SuccessRate: stat.SuccessRate,
+				Timestamp:   stat.Timestamp,
+			})
+
 			if stat.Total < o.config.MinTransactions {
 				continue
 			}
 
 			if stat.DropPercentage > o.config.Threshold {
-				fmt.Println("alerting for dimension", dimension, stat.Value)
+				fmt.Println(stat)
+				fmt.Printf("alerting for dimension %s drop %f\n", dimension, stat.DropPercentage)
 				alert := &models.Alert{
 					ID:             fmt.Sprintf("%s-%s-%d", dimension, stat.Value, time.Now().Unix()),
 					Dimension:      dimension,
@@ -130,7 +143,7 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRate(previousStats, current.Gateway)
-		dropPercentage := current.SuccessRate - previousRate
+		dropPercentage := previousRate - current.SuccessRate
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway",

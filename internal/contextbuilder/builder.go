@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yourusername/payment-monitor/pkg/models"
@@ -254,34 +252,4 @@ func (b *ContextBuilder) getActiveExperiments(ctx context.Context) ([]models.Exp
 	}
 
 	return experiments, nil
-}
-
-func (b *ContextBuilder) getGitHubChanges(ctx context.Context, since time.Time) ([]models.GitHubChange, error) {
-	if b.config.GitHubToken == "" {
-		return nil, nil
-	}
-
-	commits, err := b.getRecentCommits(ctx, "", since)
-	if err != nil {
-		if strings.Contains(err.Error(), "SAML enforcement") {
-			log.Printf("Warning: GitHub repository access requires SAML SSO configuration. Skipping GitHub data: %v", err)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("error getting commits: %w", err)
-	}
-
-	prs, err := b.getRecentPRs(ctx, "", since)
-	if err != nil {
-		if strings.Contains(err.Error(), "SAML enforcement") {
-			log.Printf("Warning: GitHub repository access requires SAML SSO configuration. Skipping GitHub data: %v", err)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("error getting pull requests: %w", err)
-	}
-
-	changes := make([]models.GitHubChange, 0, len(commits)+len(prs))
-	changes = append(changes, commits...)
-	changes = append(changes, prs...)
-
-	return changes, nil
 }
