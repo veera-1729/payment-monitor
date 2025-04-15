@@ -223,7 +223,18 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 
 			// Broadcast alert to WebSocket clients
 			if hub != nil {
-				hub.Broadcast <- []byte(fmt.Sprintf("Alert: %+v", alert))
+				// Create a properly formatted alert message
+				alertMsg := &wshandler.AlertMessage{
+					Type:           "alert",
+					ID:             alert.ID,
+					Dimension:      alert.Dimension,
+					Value:          alert.Value,
+					CurrentRate:    alert.CurrentRate,
+					PreviousRate:   alert.PreviousRate,
+					DropPercentage: alert.DropPercentage,
+					Timestamp:      alert.Timestamp,
+				}
+				hub.BroadcastAlert(alertMsg)
 			}
 		}
 	}
