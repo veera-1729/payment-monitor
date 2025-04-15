@@ -34,6 +34,7 @@ type AlertMessage struct {
 	RootCause       string    `json:"root_cause,omitempty"`
 	Confidence      float64   `json:"confidence,omitempty"`
 	Recommendations []string  `json:"recommendations,omitempty"`
+	RelatedChanges  []string  `json:"related_changes,omitempty"`
 }
 
 type Hub struct {

@@ -253,6 +253,7 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 					RootCause:       analysis.RootCause,
 					Confidence:      analysis.Confidence,
 					Recommendations: analysis.Recommendations,
+					RelatedChanges:  analysis.RelatedChanges,
 				}
 				hub.BroadcastAlert(alertMsg)
 			}

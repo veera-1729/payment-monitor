@@ -7,7 +7,11 @@ import {
   Box,
   Chip,
   Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { format } from 'date-fns';
 
 function AlertsList({ alerts }) {
@@ -26,7 +30,7 @@ function AlertsList({ alerts }) {
       <Typography variant="h6" sx={{ mb: 2 }}>
         Recent Alerts
       </Typography>
-      <List>
+      <List disablePadding>
         {alerts.map((alert, index) => (
           <React.Fragment key={alert.id}>
             <ListItem
@@ -35,9 +39,12 @@ function AlertsList({ alerts }) {
                 bgcolor: 'background.paper',
                 borderRadius: 1,
                 mb: 1,
+                p: 0,
+                flexDirection: 'column'
               }}
             >
               <ListItemText
+                sx={{ px: 2, pt: 2, pb: 1 }}
                 primary={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography variant="subtitle1" component="span">
@@ -71,61 +78,6 @@ function AlertsList({ alerts }) {
                     >
                       Drop: {alert.drop_percentage.toFixed(2)}%
                     </Typography>
-                    {alert.root_cause && (
-                      <>
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          color="text.primary"
-                          sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}
-                        >
-                          Root Cause: 
-                        </Typography>
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          color="text.primary"
-                          sx={{ display: 'block', mb: 0.5 }}
-                        >
-                          {alert.root_cause}
-                        </Typography>
-                      </>
-                    )}
-                    {alert.confidence > 0 && (
-                      <Typography
-                        component="span"
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ display: 'block', mb: 0.5 }}
-                      >
-                        Confidence: {(alert.confidence * 100).toFixed(0)}%
-                      </Typography>
-                    )}
-                    {alert.recommendations && alert.recommendations.length > 0 && (
-                      <>
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          color="text.primary"
-                          sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}
-                        >
-                          Recommendations:
-                        </Typography>
-                        <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                          {alert.recommendations.map((rec, i) => (
-                            <li key={i}>
-                              <Typography
-                                component="span"
-                                variant="body2"
-                                color="text.primary"
-                              >
-                                {rec}
-                              </Typography>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
                     <Typography
                       component="span"
                       variant="caption"
@@ -136,8 +88,55 @@ function AlertsList({ alerts }) {
                   </React.Fragment>
                 }
               />
+
+              {(alert.root_cause || alert.recommendations?.length > 0 || alert.related_changes?.length > 0) && (
+                <Accordion sx={{ width: '100%', boxShadow: 'none', '&:before': { display: 'none' }, borderTop: '1px solid rgba(0, 0, 0, 0.12)' }}>
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls={`panel${index}-content`}
+                    id={`panel${index}-header`}
+                    sx={{ minHeight: '48px', '& .MuiAccordionSummary-content': { margin: '12px 0' } }}
+                  >
+                    <Typography variant="body2">Analysis Details</Typography>
+                    {alert.confidence > 0 && (
+                       <Chip label={`Confidence: ${(alert.confidence * 100).toFixed(0)}%`} size="small" sx={{ ml: 2 }} />
+                    )}
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ pt: 0 }}>
+                    {alert.root_cause && (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2">Root Cause:</Typography>
+                        <Typography variant="body2">{alert.root_cause}</Typography>
+                      </Box>
+                    )}
+                    {alert.recommendations && alert.recommendations.length > 0 && (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2">Recommendations:</Typography>
+                        <List dense disablePadding sx={{ pl: 2 }}>
+                          {alert.recommendations.map((rec, i) => (
+                            <ListItem key={i} disableGutters sx={{ p: 0 }}>
+                              <Typography variant="body2">- {rec}</Typography>
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Box>
+                    )}
+                    {alert.related_changes && alert.related_changes.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2">Related Changes:</Typography>
+                        <List dense disablePadding sx={{ pl: 2 }}>
+                          {alert.related_changes.map((change, i) => (
+                            <ListItem key={i} disableGutters sx={{ p: 0 }}>
+                              <Typography variant="body2">- {change}</Typography>
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              )}
             </ListItem>
-            {index < alerts.length - 1 && <Divider />}
           </React.Fragment>
         ))}
       </List>
