@@ -216,6 +216,23 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 				continue
 			}
 
+			// Print detailed analysis results
+			log.Printf("===== ANALYSIS RESULTS =====")
+			log.Printf("Alert for: %s - %s", alert.Dimension, alert.Value)
+			log.Printf("Root Cause: %s", analysis.RootCause)
+			log.Printf("Confidence: %.2f", analysis.Confidence)
+			log.Printf("Recommendations:")
+			for i, rec := range analysis.Recommendations {
+				log.Printf("  %d. %s", i+1, rec)
+			}
+			if len(analysis.RelatedChanges) > 0 {
+				log.Printf("Related Changes:")
+				for i, change := range analysis.RelatedChanges {
+					log.Printf("  %d. %s", i+1, change)
+				}
+			}
+			log.Printf("============================")
+
 			// Update alert with analysis
 			alert.RootCause = analysis.RootCause
 			alert.Confidence = analysis.Confidence
@@ -223,7 +240,21 @@ func processAlerts(ctx context.Context, alertChan chan *models.Alert, contextBui
 
 			// Broadcast alert to WebSocket clients
 			if hub != nil {
-				hub.Broadcast <- []byte(fmt.Sprintf("Alert: %+v", alert))
+				// Create a properly formatted alert message
+				alertMsg := &wshandler.AlertMessage{
+					Type:            "alert",
+					ID:              alert.ID,
+					Dimension:       alert.Dimension,
+					Value:           alert.Value,
+					CurrentRate:     alert.CurrentRate,
+					PreviousRate:    alert.PreviousRate,
+					DropPercentage:  alert.DropPercentage,
+					Timestamp:       alert.Timestamp,
+					RootCause:       analysis.RootCause,
+					Confidence:      analysis.Confidence,
+					Recommendations: analysis.Recommendations,
+				}
+				hub.BroadcastAlert(alertMsg)
 			}
 		}
 	}

@@ -71,6 +71,61 @@ function AlertsList({ alerts }) {
                     >
                       Drop: {alert.drop_percentage.toFixed(2)}%
                     </Typography>
+                    {alert.root_cause && (
+                      <>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}
+                        >
+                          Root Cause: 
+                        </Typography>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ display: 'block', mb: 0.5 }}
+                        >
+                          {alert.root_cause}
+                        </Typography>
+                      </>
+                    )}
+                    {alert.confidence > 0 && (
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 0.5 }}
+                      >
+                        Confidence: {(alert.confidence * 100).toFixed(0)}%
+                      </Typography>
+                    )}
+                    {alert.recommendations && alert.recommendations.length > 0 && (
+                      <>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}
+                        >
+                          Recommendations:
+                        </Typography>
+                        <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                          {alert.recommendations.map((rec, i) => (
+                            <li key={i}>
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                color="text.primary"
+                              >
+                                {rec}
+                              </Typography>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
                     <Typography
                       component="span"
                       variant="caption"

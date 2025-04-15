@@ -23,14 +23,17 @@ type MetricsMessage struct {
 }
 
 type AlertMessage struct {
-	Type           string    `json:"type"`
-	ID             string    `json:"id"`
-	Dimension      string    `json:"dimension"`
-	Value          string    `json:"value"`
-	CurrentRate    float64   `json:"current_rate"`
-	PreviousRate   float64   `json:"previous_rate"`
-	DropPercentage float64   `json:"drop_percentage"`
-	Timestamp      time.Time `json:"timestamp"`
+	Type            string    `json:"type"`
+	ID              string    `json:"id"`
+	Dimension       string    `json:"dimension"`
+	Value           string    `json:"value"`
+	CurrentRate     float64   `json:"current_rate"`
+	PreviousRate    float64   `json:"previous_rate"`
+	DropPercentage  float64   `json:"drop_percentage"`
+	Timestamp       time.Time `json:"timestamp"`
+	RootCause       string    `json:"root_cause,omitempty"`
+	Confidence      float64   `json:"confidence,omitempty"`
+	Recommendations []string  `json:"recommendations,omitempty"`
 }
 
 type Hub struct {
