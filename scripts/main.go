@@ -14,7 +14,7 @@ func RunMigrations() {
 		return
 	}
 
-	dsn := "postgres://bheemisetty.v:@localhost:5433/optimizer_core_live?sslmode=disable"
+	dsn := "postgres://lavdeep.singh:@localhost:5432/optimizer_core_live?sslmode=disable"
 
 	switch os.Args[1] {
 	case "normal":

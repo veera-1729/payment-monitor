@@ -46,9 +46,24 @@ type Config struct {
 		} `yaml:"logs"`
 		Experiments struct {
 			Enabled bool   `yaml:"enabled"`
-			Endpoint string `yaml:"endpoint"`
+			ApiUrl string `yaml:"api_url"`
+			SplitzToken string`yaml:"splitz_token"`
+			ExperimentIds []ExperimentID `yaml:"experiment_ids"`
 		} `yaml:"experiments"`
 	} `yaml:"context_builder"`
+
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		Password string `yaml:"password"`
+		DB       int    `yaml:"db"`
+	} `yaml:"redis"`
+}
+
+type ExperimentID struct {
+    ID          string `yaml:"id"`
+    Name        string `yaml:"name"`
+    Description string `yaml:"description"`
 }
 
 // LoadConfig loads the configuration from a YAML file
@@ -64,4 +79,4 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &config, nil
-} 
+}

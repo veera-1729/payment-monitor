@@ -10,24 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	"github.com/yourusername/payment-monitor/pkg/models"
 )
 
-type ContextBuilder struct {
-	config *Config
-	client *http.Client
-}
-
-type Config struct {
-	GitHubToken   string
-	GitHubRepos   []string
-	LogPath       string
-	ExperimentURL string
-	MaxCommitsPerRepo int
-	LookbackHours     int
-}
-
-func NewContextBuilder(config *Config) *ContextBuilder {
+func NewContextBuilder(config *Config, redis *redis.Client) *ContextBuilder {
 	if config.MaxCommitsPerRepo == 0 {
 		config.MaxCommitsPerRepo = 10
 	}
@@ -37,6 +24,7 @@ func NewContextBuilder(config *Config) *ContextBuilder {
 	return &ContextBuilder{
 		config: config,
 		client: &http.Client{Timeout: 10 * time.Second},
+		redisClient: redis,
 	}
 }
 
@@ -78,12 +66,7 @@ func (b *ContextBuilder) BuildContext(ctx context.Context, alert *models.Alert) 
 
 	// Gather experiment data
 	if b.config.ExperimentURL != "" {
-		experiments, err := b.getActiveExperiments(ctx)
-		if err != nil {
-			fmt.Printf("Error getting experiments: %v\n", err)
-		} else {
-			analysisContext.Experiments = experiments
-		}
+		analysisContext.Experiments = b.getActiveExperiments(ctx)
 	}
 
 	return analysisContext, nil
@@ -339,24 +322,16 @@ func (b *ContextBuilder) getRecentLogs(ctx context.Context) ([]models.LogEntry, 
 	// Implement log reading logic based on your logging system
 	// This is a placeholder implementation
 	return []models.LogEntry{}, nil
-}
-
-func (b *ContextBuilder) getActiveExperiments(ctx context.Context) ([]models.Experiment, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", b.config.ExperimentURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := b.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var experiments []models.Experiment
-	if err := json.NewDecoder(resp.Body).Decode(&experiments); err != nil {
-		return nil, err
-	}
-
-	return experiments, nil
 } 
+
+// Handler for the /build-context endpoint
+func (b *ContextBuilder) getActiveExperiments(ctx context.Context) []models.ExperimentPair {
+    
+    // Collect experiment pairs
+    experimentPairs, err := b.CollectExperimentPairs(ctx)
+    if err != nil {
+        fmt.Printf("Error collecting experiment pairs: %v \n", err)
+    }
+
+	return experimentPairs
+}
