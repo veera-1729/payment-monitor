@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis"
+	"github.com/yourusername/payment-monitor/internal/contextbuilder"
+	"github.com/yourusername/payment-monitor/internal/llm"
 	"github.com/yourusername/payment-monitor/internal/observer"
 	"github.com/yourusername/payment-monitor/internal/seeder"
 	"github.com/yourusername/payment-monitor/pkg/config"
@@ -72,6 +75,22 @@ func main() {
 	}()
 
 	// Wait for interrupt signal
+	contextBuilderConfig := &contextbuilder.Config{
+		GitHubToken:   cfg.ContextBuilder.GitHub.Token,
+		GitHubRepos:   cfg.ContextBuilder.GitHub.Repos,
+		LogPath:       cfg.ContextBuilder.Logs.Path,
+		ExperimentURL: cfg.ContextBuilder.Experiments.ApiUrl,
+		MaxCommitsPerRepo: 10,
+		LookbackHours:     24,
+		SplitzToken:   cfg.ContextBuilder.Experiments.SplitzToken,
+		ExperimentIds: cfg.ContextBuilder.Experiments.ExperimentIds,
+	}
+
+	contextBuilder := contextbuilder.NewContextBuilder(contextBuilderConfig, initRedis(cfg))
+
+	contextBuilder.FetchAndStorePreviousData(cfg.ContextBuilder.Experiments.ExperimentIds)
+
+	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
@@ -117,3 +136,57 @@ func getEnabledDimensions(cfg *config.Config) []string {
 	}
 	return dimensions
 } 
+
+func processAlerts(
+	ctx context.Context,
+	alertChan <-chan *models.Alert,
+	contextBuilder *contextbuilder.ContextBuilder,
+	analyzer *llm.Analyzer,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case alert := <-alertChan:
+			go func(alert *models.Alert) {
+				// Build context
+				fmt.Println("Building context for alert", alert)
+				context, err := contextBuilder.BuildContext(ctx, alert)
+				if err != nil {
+					log.Printf("Error building context: %v", err)
+					return
+				}
+
+				// Analyze with LLM
+				result, err := analyzer.Analyze(ctx, context)
+				if err != nil {
+					log.Printf("Error analyzing with LLM: %v", err)
+					return
+				}
+
+				// Log the analysis result
+				log.Printf("Analysis for alert %s:\nRoot Cause: %s\nConfidence: %.2f\nRecommendations: %v\n",
+					alert.ID,
+					result.RootCause,
+					result.Confidence,
+					result.Recommendations,
+				)
+
+				// TODO: Implement alert notification (e.g., Slack, email, etc.)
+			}(alert)
+		default:
+			fmt.Println("listening for alerts")
+			time.Sleep(1 * time.Second)
+		}
+	}
+} 
+
+func initRedis(cfg *config.Config) (*redis.Client) {
+    // Initialize Redis client
+    rdb := redis.NewClient(&redis.Options{
+        Addr:     cfg.Redis.Host + ":" + fmt.Sprint(cfg.Redis.Port),
+        Password: cfg.Redis.Password, // no password set
+        DB:       cfg.Redis.DB,  // use default DB
+    })
+	return rdb
+}

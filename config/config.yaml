@@ -14,8 +14,8 @@ monitoring:
 
 database:
   host: "localhost"
-  port: 5433
-  user: "bheemisetty.v"
+  port: 5432
+  user: "lavdeep.singh"
   password: ""
   dbname: "optimizer_core_live"
   sslmode: "disable"
@@ -39,5 +39,34 @@ context_builder:
     enabled: false
     path: "/var/log/payments"
   experiments:
-    enabled: false
-    endpoint: "http://experiment-service/api/active" 
+    enabled: true
+    api_url: "https://splitz-lavdeep-offers.dev.razorpay.in/twirp/rzp.splitz.experiment.v1.ExperimentAPI/Get"
+    splitz_token: ""
+    experiment_ids:
+      - id: "OjtvbAFEHmYTnu"
+        name: "api_bypass"
+        description: "API Bypass experiment"
+      - id: "OlZ1ZQRWzSoZuy" 
+        name: "can_route_reasons_bypass"
+        description: "Can Route Reasons Bypass experiment"
+      - id: "OsHB7dhiXwTQhD"
+        name: "rearch_ramp_allow"
+        description: "Rearch Ramp Allow experiment"
+      - id: "P7cxDH6hXnXq08"
+        name: "enable_cls"
+        description: "Enable CLS experiment"
+      - id: "P7cuBHbCHIuOWp"
+        name: "enable_fee_breakup"
+        description: "Enable Fee Breakup experiment"
+      - id: "PN91VI5yWzeUFB"
+        name: "enable_amount_credit_split"
+        description: "Enable Amount Credit Split experiment"
+      - id: "OZh2nRpKivTnH6"
+        name: "api_ledger_cut_off"
+        description: "API Ledger Cut Off experiment"
+
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+    db: 0
