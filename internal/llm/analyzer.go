@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -86,6 +87,7 @@ func (a *Analyzer) Analyze(ctx context.Context, context *models.AnalysisContext)
 		},
 	)
 
+	fmt.Printf("OpenAI API Response: %+v\n", resp)
 	if err != nil {
 		// Log detailed error information
 		fmt.Printf("OpenAI API Error: %v\nModel: %s\n", err, a.config.Model)
@@ -117,16 +119,13 @@ func (a *Analyzer) Analyze(ctx context.Context, context *models.AnalysisContext)
 	// Try to parse the response as JSON first
 	var result AnalysisResult
 	if err := json.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
-		// If JSON parsing fails, use the raw response
+		// If JSON parsing fails, log the error and create a placeholder result
+		log.Printf("Error parsing LLM JSON response: %v\nRaw response: %s", err, resp.Choices[0].Message.Content)
 		result = AnalysisResult{
-			RootCause:  resp.Choices[0].Message.Content,
-			Confidence: 0.8,
-			Recommendations: []string{
-				"Monitor the payment gateway status",
-				"Check for any recent deployments or changes",
-				"Verify network connectivity",
-			},
-			RelatedChanges: []string{},
+			RootCause:       "Could not parse analysis result from LLM.",
+			Confidence:      0.1,
+			Recommendations: []string{"Check logs for the raw LLM response.", "Verify LLM prompt and response format."},
+			RelatedChanges:  []string{},
 		}
 	}
 
@@ -169,6 +168,8 @@ Format your response as a JSON object with the following structure:
     "recommendations": ["string"],
     "related_changes": ["string"]
 }
+
+IMPORTANT: Respond *only* with the valid JSON object requested above. Do not include any introductory text, explanations, summaries, or markdown formatting before or after the JSON.
 `,
 		context.PaymentStats.Dimension,
 		context.PaymentStats.Value,
