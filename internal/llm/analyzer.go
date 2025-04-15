@@ -225,13 +225,13 @@ func (a *Analyzer) formatLogs(logs []models.LogEntry) string {
 	return formatted
 }
 
-func (a *Analyzer) formatExperiments(experiments []models.Experiment) string {
+func (a *Analyzer) formatExperiments(experiments []models.ExperimentPair) string {
 	var formatted string
 	for _, exp := range experiments {
-		formatted += fmt.Sprintf("- %s (%s): %s\n",
-			exp.Name,
-			exp.ID,
-			exp.Description,
+		formatted += fmt.Sprintf("-ExperimentID: %s -PreviousExpermient: %s -CurrentExperiment: %s\n",
+			exp.ExperimentID,
+			exp.Previous,
+			exp.Current,
 		)
 	}
 	return formatted

@@ -29,6 +29,9 @@ type Alert struct {
 	DropPercentage float64
 	Timestamp      time.Time
 	Context        *AnalysisContext
+	Gateway        string
+	Method         string
+	MerchantID     string
 }
 
 // AnalysisContext contains all the context data for LLM analysis
@@ -36,7 +39,7 @@ type AnalysisContext struct {
 	PaymentStats  *PaymentStats
 	RecentChanges []GitHubChange
 	LogEntries    []LogEntry
-	Experiments   []Experiment
+	Experiments   []ExperimentPair
 }
 
 // GitHubChange represents a code change from GitHub
@@ -58,13 +61,28 @@ type LogEntry struct {
 }
 
 // Experiment represents an active A/B experiment
-type Experiment struct {
-	ID          string
-	Name        string
-	StartTime   time.Time
-	EndTime     time.Time
-	Description string
-	Changes     map[string]interface{}
+// Experiment response structure
+type ExperimentResponse struct {
+	Experiment struct {
+		ID       string `json:"id"`
+		Audience string `json:"audience"`
+		Status   string `json:"status"`
+		// Other fields omitted for brevity
+	} `json:"experiment"`
+}
+
+// StoredExperiment contains only the data we want to store
+type StoredExperiment struct {
+	ExperimentID string      `json:"experiment_id"`
+	Audience     interface{} `json:"audience"` // Changed from string to interface{} to store parsed JSON
+	FetchedAt    string      `json:"fetched_at"`
+}
+
+// ExperimentPair represents a pair of current and previous experiment data
+type ExperimentPair struct {
+	ExperimentID string            `json:"experiment_id"`
+	Current      *StoredExperiment `json:"current"`
+	Previous     *StoredExperiment `json:"previous"`
 }
 
 // Payment represents a payment transaction
