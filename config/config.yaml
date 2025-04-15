@@ -7,8 +7,8 @@ monitoring:
   dimensions:
     - name: gateway
       enabled: true
-    - name: gateway_payment_method
-      enabled: false
+    - name: gateway_method
+      enabled: true
     - name: gateway_merchant
       enabled: false
 

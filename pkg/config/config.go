@@ -9,8 +9,10 @@ import (
 type Config struct {
 	Monitoring struct {
 		Interval     int     `yaml:"interval"`
-		Threshold    float64 `yaml:"success_rate_drop"`
-		MinTransactions int `yaml:"minimum_transactions"`
+		Thresholds   struct {
+			SuccessRateDrop    float64 `yaml:"success_rate_drop"`
+			MinTransactions    int     `yaml:"minimum_transactions"`
+		} `yaml:"thresholds"`
 		Dimensions   []struct {
 			Name    string `yaml:"name"`
 			Enabled bool   `yaml:"enabled"`

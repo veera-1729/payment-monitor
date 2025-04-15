@@ -37,8 +37,8 @@ func main() {
 	// Initialize observer
 	observerConfig := &observer.Config{
 		Interval:        time.Duration(cfg.Monitoring.Interval) * time.Second,
-		Threshold:       cfg.Monitoring.Threshold,
-		MinTransactions: cfg.Monitoring.MinTransactions,
+		Threshold:       cfg.Monitoring.Thresholds.SuccessRateDrop,
+		MinTransactions: cfg.Monitoring.Thresholds.MinTransactions,
 		Dimensions:      getEnabledDimensions(cfg),
 	}
 	obs := observer.NewObserver(db, observerConfig, alertChannel)

@@ -59,7 +59,8 @@ func (o *Observer) checkDimensions() {
 			if stat.Total < o.config.MinTransactions {
 				continue
 			}
-
+			fmt.Println("current drop percentage", stat.DropPercentage)
+			fmt.Println("threshold ", o.config.Threshold)
 			if stat.DropPercentage > o.config.Threshold {
 				fmt.Println("alerting for dimension", dimension, stat.Value)
 				alert := &models.Alert{
@@ -109,7 +110,7 @@ func (o *Observer) getPaymentStats(dimension string) ([]*models.PaymentStats, er
 	switch dimension {
 	case "gateway":
 		return o.getGatewayStats(oneHourAgo, twoHoursAgo)
-	case "gateway_payment_method":
+	case "gateway_method":
 		return o.getGatewayMethodStats(oneHourAgo, twoHoursAgo)
 	case "gateway_merchant":
 		return o.getGatewayMerchantStats(oneHourAgo, twoHoursAgo)
@@ -131,7 +132,7 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 		Select("gateway, COUNT(*) as total, "+
 			"SUM(CASE WHEN status = 'STATUS_CAPTURED' THEN 1 ELSE 0 END) as successful, "+
 			"AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ?", oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?)", oneHourAgo.Unix()).
 		Group("gateway").
 		Scan(&currentStats).Error; err != nil {
 		return nil, err
@@ -144,21 +145,22 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 		SuccessRate float64
 	}
 
-	fmt.Println("previousStats", previousStats)
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ? AND created_at < ?", twoHoursAgo.Unix(), oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway").
 		Scan(&previousStats).Error; err != nil {
 		return nil, err
 	}
+	fmt.Println("previousStats", previousStats)
 
 	// Combine stats
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRate(previousStats, current.Gateway)
-		dropPercentage := current.SuccessRate - previousRate
+		dropPercentage := previousRate - current.SuccessRate // Changed to show positive drop percentage
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway",
@@ -172,7 +174,6 @@ func (o *Observer) getGatewayStats(oneHourAgo, twoHoursAgo time.Time) ([]*models
 		})
 	}
 
-	fmt.Println("stats", stats)
 	return stats, nil
 }
 
@@ -202,7 +203,7 @@ func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*
 		Select("gateway, method, COUNT(*) as total, "+
 			"SUM(CASE WHEN status = 'STATUS_CAPTURED' THEN 1 ELSE 0 END) as successful, "+
 			"AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ?", oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?)", oneHourAgo.Unix()).
 		Group("gateway, method").
 		Scan(&currentStats).Error; err != nil {
 		return nil, err
@@ -217,7 +218,8 @@ func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, method, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ? AND created_at < ?", twoHoursAgo.Unix(), oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway, method").
 		Scan(&previousStats).Error; err != nil {
 		return nil, err
@@ -227,10 +229,10 @@ func (o *Observer) getGatewayMethodStats(oneHourAgo, twoHoursAgo time.Time) ([]*
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRateForGatewayMethod(previousStats, current.Gateway, current.Method)
-		dropPercentage := current.SuccessRate - previousRate
+		dropPercentage := previousRate - current.SuccessRate
 
 		stats = append(stats, &models.PaymentStats{
-			Dimension:      "gateway_payment_method",
+			Dimension:      "gateway_method",
 			Value:          fmt.Sprintf("%s_%s", current.Gateway, current.Method),
 			Total:          int(current.Total),
 			Successful:     int(current.Successful),
@@ -258,7 +260,7 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 		Select("gateway, merchant_id, COUNT(*) as total, "+
 			"SUM(CASE WHEN status = 'STATUS_CAPTURED' THEN 1 ELSE 0 END) as successful, "+
 			"AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ?", oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?)", oneHourAgo.Unix()).
 		Group("gateway, merchant_id").
 		Scan(&currentStats).Error; err != nil {
 		return nil, err
@@ -273,7 +275,8 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 	// Get previous hour stats
 	if err := o.db.Model(&models.Payment{}).
 		Select("gateway, merchant_id, AVG(CASE WHEN status = 'STATUS_CAPTURED' THEN 1.0 ELSE 0.0 END) * 100 as success_rate").
-		Where("created_at >= ? AND created_at < ?", twoHoursAgo.Unix(), oneHourAgo.Unix()).
+		Where("to_timestamp(created_at) >= to_timestamp(?) AND to_timestamp(created_at) < to_timestamp(?)", 
+			twoHoursAgo.Unix(), oneHourAgo.Unix()).
 		Group("gateway, merchant_id").
 		Scan(&previousStats).Error; err != nil {
 		return nil, err
@@ -283,7 +286,7 @@ func (o *Observer) getGatewayMerchantStats(oneHourAgo, twoHoursAgo time.Time) ([
 	stats := make([]*models.PaymentStats, 0, len(currentStats))
 	for _, current := range currentStats {
 		previousRate := findPreviousRateForGatewayMerchant(previousStats, current.Gateway, current.MerchantID)
-		dropPercentage := current.SuccessRate - previousRate
+		dropPercentage := previousRate - current.SuccessRate
 
 		stats = append(stats, &models.PaymentStats{
 			Dimension:      "gateway_merchant",
